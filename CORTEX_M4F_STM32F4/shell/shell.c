@@ -8,7 +8,7 @@
 #include "hash-djb2.h"
 
 #include "FreeRTOS.h"
-#include "task.h"
+#include <task.h>
 #include "host.h"
 #include "bufbomb.h"
 
@@ -26,7 +26,7 @@ void ls_command(int, char **);
 void pwd_command(int, char **);
 void man_command(int, char **);
 void cat_command(int, char **);
-void ps_command(int, char **);
+//void ps_command(int, char **);
 void host_command(int, char **);
 void help_command(int, char **);
 void host_command(int, char **);
@@ -47,7 +47,7 @@ cmdlist cl[]={
 	MKCL(ls, "List directory"),
 	MKCL(man, "Show the manual of the command"),
 	MKCL(cat, "Concatenate files and print on the stdout"),
-	MKCL(ps, "Report a snapshot of the current processes"),
+//	MKCL(ps, "Report a snapshot of the current processes"),
 	MKCL(host, "Run command on host"),
 	MKCL(mmtest, "heap memory allocation test"),
 	MKCL(help, "help"),
@@ -132,13 +132,13 @@ int filedump(const char *filename){
 	return 1;
 }
 
-void ps_command(int n, char *argv[]){
-	signed char buf[1024];
-	vTaskList(buf);
-        fio_printf(1, "\n\rName          State   Priority  Stack  Num\n\r");
-        fio_printf(1, "*******************************************\n\r");
-	fio_printf(1, "%s\r\n", buf + 2);
-}
+//void ps_command(int n, char *argv[]){
+//	signed char buf[1024];
+//	vTaskList((char *)buf);
+//        fio_printf(1, "\n\rName          State   Priority  Stack  Num\n\r");
+//        fio_printf(1, "*******************************************\n\r");
+//	fio_printf(1, "%s\r\n", buf + 2);
+//}
 
 void cat_command(int n, char *argv[]){
 	char buf[256]="/romfs/";

@@ -30,7 +30,7 @@ LDFLAGS += -L $(call get_library_path,libgcc.a)
 
 # Basic configurations
 CFLAGS += -g -std=c99
-CFLAGS += -Wall
+CFLAGS += -Wall -Werror
 
 # Optimizations
 CFLAGS += -g -std=c99 -O3 -ffast-math
@@ -93,6 +93,27 @@ OBJS += $(PWD)/CORTEX_M4F_STM32F4/traffic/draw_graph.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/traffic/move_car.o
 CFLAGS += -I $(PWD)/CORTEX_M4F_STM32F4/traffic/include
 
+# shell
+OBJS += $(PWD)/CORTEX_M4F_STM32F4/shell/bufbomb.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/clib.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/filesystem.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/fio.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/hash-djb2.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/host.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/mmtest.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/osdebug.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/romfs.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/romfsind.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/shell.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/string-util.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/usart.o
+# romfs
+ROMFS += $(PWD)/CORTEX_M4F_STM32F4/shell/test-romfs.o \
+    $(PWD)/CORTEX_M4F_STM32F4/shell/test-romfs-ind.o
+
+CFLAGS += -I $(PWD)/CORTEX_M4F_STM32F4/shell/include
+CFLAGS += -DUSER_NAME=\"$(USER)\"
+
 CFLAGS += -DUSE_STDPERIPH_DRIVER
 CFLAGS += -I $(PWD)/CORTEX_M4F_STM32F4 \
 	  -I $(PWD)/include \
@@ -111,8 +132,8 @@ $(BIN_IMAGE): $(EXECUTABLE)
 	$(OBJDUMP) -h -S -D $(EXECUTABLE) > $(PROJECT).lst
 	$(SIZE) $(EXECUTABLE)
 	
-$(EXECUTABLE): $(OBJS)
-	$(LD) -o $@ $(OBJS) \
+$(EXECUTABLE): $(OBJS) $(ROMFS)
+	$(LD) -o $@ $(OBJS) $(ROMFS) \
 		--start-group $(LIBS) --end-group \
 		$(LDFLAGS)
 

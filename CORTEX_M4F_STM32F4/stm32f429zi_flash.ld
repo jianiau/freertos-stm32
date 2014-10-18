@@ -80,6 +80,10 @@ SECTIONS
     . = ALIGN(4);
     *(.rodata)         /* .rodata sections (constants, strings, etc.) */
     *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
+    _sromind = .;
+	*(.romfsind.*)
+	_sromfs = .;
+	*(.romfs.*)
     . = ALIGN(4);
   } >FLASH
 
@@ -159,6 +163,7 @@ SECTIONS
     . = ALIGN(4);
     _ebss = .;         /* define a global symbol at bss end */
     __bss_end__ = _ebss;
+    pwd_hash = .;
   } >RAM
 
   /* User_heap_stack section, used to check that there is enough RAM left */

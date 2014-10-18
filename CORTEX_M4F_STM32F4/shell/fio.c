@@ -17,7 +17,7 @@ enum KeyName{ESC=27, BACKSPACE=127};
 
 /* Imple */
 static ssize_t stdin_read(void * opaque, void * buf, size_t count) {
-    int i=0, endofline=0, last_chr_is_esc;
+    int i=0, endofline=0, last_chr_is_esc=0;
     char *ptrbuf=buf;
     char ch;
     while(i < count&&endofline!=1){
@@ -61,7 +61,6 @@ static ssize_t stdin_read(void * opaque, void * buf, size_t count) {
 static ssize_t stdout_write(void * opaque, const void * buf, size_t count) {
     int i;
     const char * data = (const char *) buf;
-    
     for (i = 0; i < count; i++)
         send_byte(data[i]);
     
@@ -225,6 +224,6 @@ static int devfs_open(void * opaque, const char * path, int flags, int mode) {
 }
 
 void register_devfs() {
-    DBGOUT("Registering devfs.\r\n");
+//    DBGOUT("Registering devfs.\r\n");
     register_fs("dev", devfs_open, NULL);
 }
