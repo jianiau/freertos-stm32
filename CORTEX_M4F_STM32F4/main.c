@@ -39,10 +39,20 @@
 #include "task.h"
 #include "semphr.h"
 
+#include "usart.h"
+#include "filesystem.h"
+#include "fio.h"
+#include "romfs.h"
+#include "hash-djb2.h"
+#include "clib.h"
+#include "shell.h"
+#include "host.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+void send_byte(char ch);
+
 xQueueHandle t_queue; /* Traffic light queue. */
 xQueueHandle t_mutex; /* Traffic light mutex. */
 
@@ -50,6 +60,12 @@ static int traffic_index = 0;
 static int button_change_traffic = 0;
 static int states[] = {TRAFFIC_RED, TRAFFIC_YELLOW, TRAFFIC_GREEN, 
 							TRAFFIC_YELLOW};
+
+volatile xSemaphoreHandle serial_tx_wait_sem;
+/* Add for serial input */
+volatile xQueueHandle serial_rx_queue;
+extern const unsigned char _sromfs;
+extern uint32_t pwd_hash; // /romfs
 
 void
 prvInit()
@@ -91,6 +107,7 @@ static void GetTrafficState(int change_state, int *v_state, int *h_state)
 		break;
 	}
 }
+
 
 static void DrawGraphTask( void *pvParameters)
 {
@@ -172,9 +189,135 @@ static void ButtonEventTask(void *pvParameters)
 	}
 }
 
+/* IRQ handler to handle USART1 interruptss (both transmit and receive
+ * interrupts). */
+void USART1_IRQHandler()
+{
+	static signed portBASE_TYPE xHigherPriorityTaskWoken;
+	//xHigherPriorityTaskWoken = pdFALSE;
+	/* If this interrupt is for a transmit... */
+	if (USART_GetITStatus(USART1, USART_IT_TXE) != RESET) {
+		/* "give" the serial_tx_wait_sem semaphore to notfiy processes
+		 * that the buffer has a spot free for the next byte.
+		 */
+		
+		//xSemaphoreGiveFromISR(serial_tx_wait_sem, &xHigherPriorityTaskWoken);
+		//xSemaphoreGive(serial_tx_wait_sem);
+		/* Diables the transmit interrupt. */
+		USART_ITConfig(USART1, USART_IT_TXE, DISABLE);
+		/* If this interrupt is for a receive... */
+	}else if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET){
+		char msg = USART_ReceiveData(USART1);
+		/* If there is an error when queueing the received byte, freeze! */
+				
+		//if(!xQueueSendToBackFromISR(serial_rx_queue, &msg, &xHigherPriorityTaskWoken))
+		//if(!(xQueueSendToBack(serial_rx_queue, &msg, 0))) {
+		
+		if(!(xQueueSendToBack(serial_rx_queue, &msg, 0))) {
+			while(1)  {
+				fio_printf(1, "\r\nRX IRQ 111\r\n");
+			}
+		} else {
+		}
+	}
+	else {
+		/* Only transmit and receive interrupts should be enabled.
+		 * If this is another type of interrupt, freeze.
+		 */
+		while(1);
+	}
+
+	if (xHigherPriorityTaskWoken) {
+		taskYIELD();
+	}
+}
+
+
+void send_byte(char ch)
+{
+	/* Wait until the RS232 port can receive another byte (this semaphore
+	 * is "given" by the RS232 port interrupt when the buffer has room for
+	 * another byte.
+	 */
+//	while (!xSemaphoreTake(serial_tx_wait_sem, portMAX_DELAY));
+
+	/* Send the byte and enable the transmit interrupt (it is disabled by
+	 * the interrupt).
+	 */
+	while( !(USART1->SR & 0x00000040) );
+	USART_SendData(USART1, ch);
+//	USART_ITConfig(USART1, USART_IT_TXE, ENABLE);
+}
+
+char recv_byte()
+{
+
+	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+	char msg;
+//fio_printf(1, "\r\nrecv_byte start\r\n");
+	while(!xQueueReceive(serial_rx_queue, &msg, portMAX_DELAY));
+//fio_printf(1, "\r\nrecv_byte end\r\n");
+	return msg;
+}
+
+
+void command_prompt(void *pvParameters)
+{
+	char buf[128];
+	char *argv[20];
+    char hint[] = USER_NAME "@" USER_NAME "-STM32:~$ ";
+
+	fio_printf(1, "\r\nWelcome to FreeRTOS Shell\r\n");
+
+	while(1){
+		fio_printf(1, "%s", hint);
+		fio_read(0, buf, 127);
+		int n=parse_command(buf, argv);
+
+		/* will return pointer to the command function */
+		//if (*argv[0]=='\0')
+		cmdfunc *fptr=do_command(argv[0]);
+		if(fptr!=NULL)
+			fptr(n, argv);
+		else if (*argv[0]!='\0')
+			fio_printf(2, "\r\n\"%s\" command not found.\r\n", argv[0]);
+		else
+			fio_printf(1, "\r\n");
+	}
+
+}
+
 //Main Function
 int main(void)
 {
+	init_rs232();
+	enable_rs232_interrupts();
+	enable_rs232();
+		
+	
+	fs_init();
+	fio_init();
+	
+	fio_printf(1, "\r\n init RS232 \r\n");
+	
+	register_romfs("romfs", &_sromfs);
+	pwd_hash=hash_djb2((const uint8_t *)&"",-1); // init pwd to /romfs/
+	
+	/* Create the queue used by the serial task.  Messages for write to
+	 * the RS232. */
+	//vSemaphoreCreateBinary(serial_tx_wait_sem);
+	serial_tx_wait_sem = xSemaphoreCreateMutex();
+	/* Add for serial input 
+	 * Reference: www.freertos.org/a00116.html */
+	serial_rx_queue = xQueueCreate(1, sizeof(char));
+	
+	if (!serial_rx_queue) {
+		fio_printf(1, "\r\nqueue GG\r\n");
+		while(1);	
+	} else {
+		fio_printf(1, "\r\nqueue OK\r\n");
+	}
+
 
 	t_queue = xQueueCreate(1, sizeof(int));
 	if (!t_queue) {
@@ -190,14 +333,17 @@ int main(void)
 
 	prvInit();
 
+
+	xTaskCreate(command_prompt, "CLI",512 , NULL, tskIDLE_PRIORITY + 2, NULL);
+	
 	xTaskCreate(ChgTrafficLightTask, "Traffic Light Task", 256, 
-			( void * ) NULL, tskIDLE_PRIORITY + 1, NULL);
+			( void * ) NULL, tskIDLE_PRIORITY + 4, NULL);
 
 	xTaskCreate(ButtonEventTask, (char *) "Button Event Task", 256,
-		   	NULL, tskIDLE_PRIORITY + 1, NULL);
+		   	NULL, tskIDLE_PRIORITY + 2, NULL);
 
 	xTaskCreate(DrawGraphTask, (char *) "Draw Graph Task", 256,
-		   	NULL, tskIDLE_PRIORITY + 2, NULL);
+		   	NULL, tskIDLE_PRIORITY + 3, NULL);
 
 
 	RCC_AHB2PeriphClockCmd(RCC_AHB2Periph_RNG, ENABLE);
